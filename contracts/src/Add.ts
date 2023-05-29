@@ -6,6 +6,7 @@ import {
   method,
   MerkleWitness,
   PublicKey,
+  AccountUpdate,
 } from 'snarkyjs';
 
 class MerkleWitness4 extends MerkleWitness(4) {}
@@ -29,16 +30,16 @@ export class Add extends SmartContract {
   @state(Field) root = State<Field>();
 
   @method initState(cpsoPublicKey: PublicKey, initRoot: Field) {
-    this.cpsoPublicKey(cpsoPublicKey);
+    this.cpsoPublicKey.set(cpsoPublicKey);
     this.root.set(initRoot);
-    this.nextIndex.Set(Field(0));
+    this.nextIndex.set(Field(0));
   }
 
   @method addDoctor(
     cpsoPrivateKey: PrivateKey,
     doctor: PublicKey,
     leafWitness: MerkleWitness4
-  ): Doctor {
+  ) {
     // Circuit Assertion
     const commitedPublicKey = this.cpsoPublicKey.get();
     this.cpsoPublicKey.assertEquals(commitedPublicKey);
@@ -58,8 +59,18 @@ export class Add extends SmartContract {
     const currIndex = this.nextIndex.get();
     this.nextIndex.assertEquals(currIndex);
     this.nextIndex.set(currIndex.add(Field(1)));
+  }
 
-    // Return new Doctor
-    return new Doctor({ pubKey: doctor, index: currIndex });
+  @method verifySickNote(
+    doctorWitness: MerkleWitness4,
+    doctorPubkey: PublicKey,
+    signature: Signature,
+    patientPubKey: PublicKey
+  ) {
+    //Verify that the doctor is in the list of doctors
+    this.root.assertEquals(doctorWitness.calculateRoot(doctorPubkey.x));
+
+    const ok = signature.verify(doctorPubkey, patientPubKey.toFields());
+    ok.assertTrue();
   }
 }
