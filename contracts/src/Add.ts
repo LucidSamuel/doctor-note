@@ -1,5 +1,14 @@
-import { Field, SmartContract, state, State, method } from 'snarkyjs';
+import {
+  Field,
+  SmartContract,
+  state,
+  State,
+  method,
+  MerkleWitness,
+  PublicKey,
+} from 'snarkyjs';
 
+class MerkleWitness4 extends MerkleWitness(4) {}
 /**
  * Basic Example
  * See https://docs.minaprotocol.com/zkapps for more info.
@@ -9,17 +18,48 @@ import { Field, SmartContract, state, State, method } from 'snarkyjs';
  *
  * This file is safe to delete and replace with your own contract.
  */
-export class Add extends SmartContract {
-  @state(Field) num = State<Field>();
 
-  init() {
-    super.init();
-    this.num.set(Field(1));
+export class Add extends SmartContract {
+  @state(Field) nextIndex = State<Field>();
+
+  // Dubai Association of Medical Doctors (UAE)
+  @state(PublicKey) cpsoPublicKey = State<PublicKey>();
+
+  // We use a field instead of an Int64 because there's a limit on the range of values allowable in Snarky
+  @state(Field) root = State<Field>();
+
+  @method initState(cpsoPublicKey: PublicKey, initRoot: Field) {
+    this.cpsoPublicKey(cpsoPublicKey);
+    this.root.set(initRoot);
+    this.nextIndex.Set(Field(0));
   }
 
-  @method update() {
-    const currentState = this.num.getAndAssertEquals();
-    const newState = currentState.add(2);
-    this.num.set(newState);
+  @method addDoctor(
+    cpsoPrivateKey: PrivateKey,
+    doctor: PublicKey,
+    leafWitness: MerkleWitness4
+  ): Doctor {
+    // Circuit Assertion
+    const commitedPublicKey = this.cpsoPublicKey.get();
+    this.cpsoPublicKey.assertEquals(commitedPublicKey);
+
+    // Check that the Public Key is the same as the one on the contract
+    commitedPublicKey.assertEquals(cpsoPrivateKey.toPublicKey());
+
+    const initialRoot = this.root.get();
+    this.root.assertEquals(initialRoot);
+
+    this.nextIndex.assertEquals(leafWitness.calculateIndex());
+
+    const newRoot = leafWitness.calculateRoot(doctor.x);
+    this.root.set(newRoot);
+
+    // Set new Index
+    const currIndex = this.nextIndex.get();
+    this.nextIndex.assertEquals(currIndex);
+    this.nextIndex.set(currIndex.add(Field(1)));
+
+    // Return new Doctor
+    return new Doctor({ pubKey: doctor, index: currIndex });
   }
 }
